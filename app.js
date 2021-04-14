@@ -218,9 +218,259 @@ mysql
           [req.body.categorias[index].idCategoria, req.body.idPaleta]
         );
       }
-      res.send()
+      res.send();
     });
 
+
+    //ruta para mis paletas
+    app.get("/paleta/usuario/:idUsuario", async (req, res) => {
+      const [allPaletas] = await connection.execute(
+        ` 
+        SELECT *
+        FROM paleta
+        WHERE idUsuario=?`,
+        [req.params.idUsuario]
+      );
+      const paletasFinales = [];
+      console.log(allPaletas)
+      for (let index = 0; index < allPaletas.length; index++) {
+        const { idPaleta } = allPaletas[index];
+
+        const [paletas] = await connection.execute(
+          ` 
+          SELECT *
+          FROM paleta
+          WHERE idPaleta=?`,
+          [idPaleta]
+        );
+        if (paletas.length < 1) {
+          return res.status(404).send();
+        }
+        const paleta = paletas[0];
+
+        let [colores] = await connection.execute(
+          ` 
+          SELECT *
+          FROM color
+          WHERE idPaleta=?`,
+          [idPaleta]
+        );
+        colores = colores.map((color) => {
+          return {
+            color: color.hexadecimal,
+            locked: false,
+          };
+        });
+        let [categorias] = await connection.execute(
+          ` 
+          SELECT *
+          FROM paletacategoria 
+          INNER JOIN categoria on categoria.idCategoria = paletacategoria.idcategoria
+          WHERE idPaleta=?`,
+          //se obtiene de cada iteración del loop
+          [idPaleta]
+        );
+        paleta.categorias = categorias;
+        paleta.colores = colores;
+        paletasFinales.push(paleta);
+      }
+      //se mandan todas las paletas al front
+      res.send(paletasFinales);
+    });
+
+
+
+
+    //me traigo todas la paletas esta se usa en explorar
+    app.get("/paleta/explorar/:idUsuario", async (req, res) => {
+      const [allPaletas] = await connection.execute(
+        ` 
+        SELECT *
+        FROM paleta`
+      );
+      const paletasFinales = [];
+
+      for (let index = 0; index < allPaletas.length; index++) {
+        const { idPaleta } = allPaletas[index];
+
+        const [paletas] = await connection.execute(
+          ` 
+          SELECT *
+          FROM paleta
+          WHERE idPaleta=?`,
+          [idPaleta]
+        );
+        if (paletas.length < 1) {
+          return res.status(404).send();
+        }
+        const paleta = paletas[0];
+
+        const [favoritos] = await connection.execute(
+          ` 
+          SELECT *
+          FROM favorito
+          WHERE idPaleta=? AND idUsuario=?`,
+          [idPaleta,req.params.idUsuario]
+        );
+        if(favoritos.length<1){
+          paleta.favorito=false
+        }
+        else{
+          paleta.favorito=true
+        }
+        let [colores] = await connection.execute(
+          ` 
+          SELECT *
+          FROM color
+          WHERE idPaleta=?`,
+          [idPaleta]
+        );
+        colores = colores.map((color) => {
+          return {
+            color: color.hexadecimal,
+            locked: false,
+          };
+        });
+        let [categorias] = await connection.execute(
+          ` 
+          SELECT *
+          FROM paletacategoria 
+          INNER JOIN categoria on categoria.idCategoria = paletacategoria.idcategoria
+          WHERE idPaleta=?`,
+          //se obtiene de cada iteración del loop
+          [idPaleta]
+        );
+        paleta.categorias = categorias;
+        paleta.colores = colores;
+        paletasFinales.push(paleta);
+      }
+      //se mandan todas las paletas al front
+      res.send(paletasFinales);
+    });
+
+    //borra las paletas de colores indica desde del front
+    //los delet NO tiene body tienen params
+    app.delete("/paleta/:idPaleta", async (req, res) => {
+      await connection.execute(
+        ` 
+    DELETE FROM color
+    WHERE idPaleta=?
+    `,
+        [req.params.idPaleta]
+      );
+
+      await connection.execute(
+        ` 
+    DELETE FROM paletacategoria
+    WHERE idPaleta=?
+    `,
+        [req.params.idPaleta]
+      );
+
+      await connection.execute(
+        ` 
+  DELETE FROM paleta
+  WHERE idPaleta=?
+  `,
+        [req.params.idPaleta]
+      );
+
+      res.send();
+    });
+
+  app.put("/paleta/favorito/", async (req, res) => {
+    if(req.body.favorito){
+      await connection.execute(
+        ` 
+        INSERT INTO favorito(idPaleta,idUsuario)
+        VALUES(?,?)`,
+        //me lo manda el front------------NO HACER CONCATENACION porque es vulnerable
+        [req.body.idPaleta, req.body.idUsuario]
+      );  
+    }
+    else{
+      await connection.execute(
+        ` 
+    DELETE FROM favorito
+    WHERE idPaleta=? AND idUsuario=?
+    `,
+        [req.body.idPaleta, req.body.idUsuario]
+      );
+    }
+    res.send();
+  })
+
+  
+    //me traigo las paletas favs
+    app.get("/paleta/favoritos/:idUsuario", async (req, res) => {
+      const [allPaletas] = await connection.execute(
+        ` 
+        SELECT *
+        FROM favorito
+        WHERE idUsuario=?`
+        ,[req.params.idUsuario]
+      );
+      const paletasFinales = [];
+
+      for (let index = 0; index < allPaletas.length; index++) {
+        const { idPaleta } = allPaletas[index];
+
+        const [paletas] = await connection.execute(
+          ` 
+          SELECT *
+          FROM paleta
+          WHERE idPaleta=?`,
+          [idPaleta]
+        );
+        if (paletas.length < 1) {
+          return res.status(404).send();
+        }
+        const paleta = paletas[0];
+
+        const [favoritos] = await connection.execute(
+          ` 
+          SELECT *
+          FROM favorito
+          WHERE idPaleta=? AND idUsuario=?`,
+          [idPaleta,req.params.idUsuario]
+        );
+        if(favoritos.length<1){
+          paleta.favorito=false
+        }
+        else{
+          paleta.favorito=true
+        }
+        let [colores] = await connection.execute(
+          ` 
+          SELECT *
+          FROM color
+          WHERE idPaleta=?`,
+          [idPaleta]
+        );
+        colores = colores.map((color) => {
+          return {
+            color: color.hexadecimal,
+            locked: false,
+          };
+        });
+        let [categorias] = await connection.execute(
+          ` 
+          SELECT *
+          FROM paletacategoria 
+          INNER JOIN categoria on categoria.idCategoria = paletacategoria.idcategoria
+          WHERE idPaleta=?`,
+          //se obtiene de cada iteración del loop
+          [idPaleta]
+        );
+        paleta.categorias = categorias;
+        paleta.colores = colores;
+        paletasFinales.push(paleta);
+      }
+      //se mandan todas las paletas al front
+      res.send(paletasFinales);
+    });
+
+    
     app.listen(port, () => {
       console.log(`Color Master app listening at http://localhost:${port}`);
     });
