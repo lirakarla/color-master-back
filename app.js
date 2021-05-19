@@ -5,6 +5,7 @@ const app = express();
 const port = 4000;
 const mysql = require("mysql2/promise");
 const { raw } = require("express");
+const bcrypt = require("bcrypt");
 
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
@@ -50,13 +51,14 @@ mysql
       if (rows.length > 0) {
         return res.status(409).send();
       }
+      const hash = await bcrypt.hash(req.body.contrasena, 10);
 
       await connection.execute(
         ` 
         INSERT INTO usuario(correo, username, contrasena)
         VALUES(?,?,?)`,
         //me lo manda el front------------NO HACER CONCATENACION porque es vulnerable
-        [req.body.correo, req.body.username, req.body.contrasena]
+        [req.body.correo, req.body.username, hash]
       );
       const [rows2] = await connection.execute(
         ` 
@@ -79,12 +81,24 @@ mysql
         ` 
           SELECT *
           FROM usuario
-          WHERE username=? and contrasena=?`,
+          WHERE username=? `,
         //me lo manda el front------------NO HACER CONCATENACION porque es vulnerable
-        [req.body.username, req.body.contrasena]
+        [req.body.username]
       );
       //await hace que se bloquee hasta que reciba los datos
+
       if (rows.length === 0) {
+        return res.status(401).send();
+      }
+
+      const result = await bcrypt.compare(
+        req.body.contrasena,
+        rows[0].contrasena
+      );
+
+      console.log(result);
+
+      if (rows.length === 0 || !result) {
         return res.status(401).send();
       }
 
@@ -221,7 +235,6 @@ mysql
       res.send();
     });
 
-
     //ruta para mis paletas
     app.get("/paleta/usuario/:idUsuario", async (req, res) => {
       const [allPaletas] = await connection.execute(
@@ -232,7 +245,7 @@ mysql
         [req.params.idUsuario]
       );
       const paletasFinales = [];
-      console.log(allPaletas)
+      console.log(allPaletas);
       for (let index = 0; index < allPaletas.length; index++) {
         const { idPaleta } = allPaletas[index];
 
@@ -278,9 +291,6 @@ mysql
       res.send(paletasFinales);
     });
 
-
-
-
     //me traigo todas la paletas esta se usa en explorar
     app.get("/paleta/explorar/:idUsuario", async (req, res) => {
       const [allPaletas] = await connection.execute(
@@ -310,13 +320,12 @@ mysql
           SELECT *
           FROM favorito
           WHERE idPaleta=? AND idUsuario=?`,
-          [idPaleta,req.params.idUsuario]
+          [idPaleta, req.params.idUsuario]
         );
-        if(favoritos.length<1){
-          paleta.favorito=false
-        }
-        else{
-          paleta.favorito=true
+        if (favoritos.length < 1) {
+          paleta.favorito = false;
+        } else {
+          paleta.favorito = true;
         }
         let [colores] = await connection.execute(
           ` 
@@ -378,37 +387,35 @@ mysql
       res.send();
     });
 
-  app.put("/paleta/favorito/", async (req, res) => {
-    if(req.body.favorito){
-      await connection.execute(
-        ` 
+    app.put("/paleta/favorito/", async (req, res) => {
+      if (req.body.favorito) {
+        await connection.execute(
+          ` 
         INSERT INTO favorito(idPaleta,idUsuario)
         VALUES(?,?)`,
-        //me lo manda el front------------NO HACER CONCATENACION porque es vulnerable
-        [req.body.idPaleta, req.body.idUsuario]
-      );  
-    }
-    else{
-      await connection.execute(
-        ` 
+          //me lo manda el front------------NO HACER CONCATENACION porque es vulnerable
+          [req.body.idPaleta, req.body.idUsuario]
+        );
+      } else {
+        await connection.execute(
+          ` 
     DELETE FROM favorito
     WHERE idPaleta=? AND idUsuario=?
     `,
-        [req.body.idPaleta, req.body.idUsuario]
-      );
-    }
-    res.send();
-  })
+          [req.body.idPaleta, req.body.idUsuario]
+        );
+      }
+      res.send();
+    });
 
-  
     //me traigo las paletas favs
     app.get("/paleta/favoritos/:idUsuario", async (req, res) => {
       const [allPaletas] = await connection.execute(
         ` 
         SELECT *
         FROM favorito
-        WHERE idUsuario=?`
-        ,[req.params.idUsuario]
+        WHERE idUsuario=?`,
+        [req.params.idUsuario]
       );
       const paletasFinales = [];
 
@@ -432,13 +439,12 @@ mysql
           SELECT *
           FROM favorito
           WHERE idPaleta=? AND idUsuario=?`,
-          [idPaleta,req.params.idUsuario]
+          [idPaleta, req.params.idUsuario]
         );
-        if(favoritos.length<1){
-          paleta.favorito=false
-        }
-        else{
-          paleta.favorito=true
+        if (favoritos.length < 1) {
+          paleta.favorito = false;
+        } else {
+          paleta.favorito = true;
         }
         let [colores] = await connection.execute(
           ` 
@@ -470,7 +476,6 @@ mysql
       res.send(paletasFinales);
     });
 
-    
     app.listen(port, () => {
       console.log(`Color Master app listening at http://localhost:${port}`);
     });
